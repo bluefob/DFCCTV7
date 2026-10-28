@@ -1,4 +1,4 @@
-<!-- Version 64.0 -->
+<!-- Version 65.0 -->
 <!DOCTYPE html>
 <html lang="en-GB">
 <head>
@@ -132,7 +132,6 @@
         .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
         .tab-content.active { display: block; }
         
-        /* Step Wizard CSS */
         .step-container { display: none; animation: fadeIn 0.3s ease-in-out; }
         .step-container.active-step { display: block; }
         
@@ -227,6 +226,10 @@
         body.dark-mode .ref-highlight { background-color: #4a401c !important; color: #ffd966 !important; border: 1px solid #856404 !important; text-align: center; }
 
         textarea { resize: vertical; min-height: 85px; }
+        
+        .address-option { padding: 10px; border-bottom: 1px solid var(--border-color); cursor: pointer; font-size: 0.9em; color: var(--text-color); transition: background-color 0.2s; }
+        .address-option:last-child { border-bottom: none; }
+        .address-option:hover { background-color: var(--calc-bg); color: var(--primary-color); font-weight: bold; }
 
         .auto-calc-section { background-color: var(--calc-bg); border: 1px dashed var(--primary-color); padding: 15px; border-radius: 6px; margin-top: 15px; }
 
@@ -346,7 +349,7 @@
 <div class="top-bar no-print">
     <div style="font-weight: bold; color: var(--primary-color);"></div>
     <div style="display: flex; align-items: center; gap: 15px;">
-        <span style="font-weight: 700; color: var(--primary-color); font-size: 1.1em; letter-spacing: 0.5px;">v64.0</span>
+        <span style="font-weight: 700; color: var(--primary-color); font-size: 1.1em; letter-spacing: 0.5px;">v65.0</span>
         <button class="dark-mode-toggle" onclick="toggleDarkMode()">🌓 Dark Mode</button>
     </div>
 </div>
@@ -409,9 +412,14 @@
                     <div class="form-row">
                         <div class="form-group full-width">
                             <label for="venue_address">Venue Name / Address & Postcode <span style="color:red">*</span></label>
-                            <textarea id="venue_address" name="Venue Address" rows="2" required placeholder="Enter building name, street, etc."></textarea>
+                            <div style="display: flex; gap: 8px;">
+                                <textarea id="venue_address" name="Venue Address" rows="2" required placeholder="Enter building name, street, etc." style="flex: 1; margin-bottom: 5px;"></textarea>
+                                <button type="button" class="view-btn no-print" onclick="searchAddress()" id="searchAddrBtn" style="padding: 10px; margin-bottom: 5px; border-radius: 4px; font-weight: bold; background: var(--primary-color);">🔍 Find</button>
+                            </div>
+                            <div id="address_results" class="no-print" style="display: none; border: 1px solid var(--border-color); background: var(--input-bg); max-height: 160px; overflow-y: auto; margin-bottom: 10px; border-radius: 4px;"></div>
+                            
                             <div class="input-group-btn" style="margin-top: 5px;">
-                                <button type="button" class="map-btn gps-btn no-print" id="gpsBtn" onclick="autoLocate()" title="Auto-Locate via GPS" style="flex: 1; max-width: 110px;">📍 Locate</button>
+                                <button type="button" class="map-btn gps-btn no-print" id="gpsBtn" onclick="autoLocate()" title="Auto-Locate via GPS" style="flex: 1; max-width: 110px;">📍 GPS</button>
                                 <input type="text" id="postcode" name="Postcode" style="flex: 2; text-transform: uppercase;" placeholder="Postcode (e.g. B1 1AA)">
                                 <button type="button" class="map-btn no-print" onclick="openMaps()" title="Open Specific Address in Maps" style="flex: 1; max-width: 90px;">🗺️ Map</button>
                             </div>
@@ -1229,6 +1237,69 @@
             alert("Location access denied or unavailable.");
             btn.innerText = origText;
         }, { timeout: 10000 });
+    }
+
+    async function searchAddress() {
+        const query = document.getElementById('venue_address').value.trim();
+        const btn = document.getElementById('searchAddrBtn');
+        const resultsContainer = document.getElementById('address_results');
+        
+        if (!query) {
+            alert("Please enter a partial address or postcode first.");
+            return;
+        }
+        
+        const origText = btn.innerText;
+        btn.innerText = "⏳...";
+        btn.disabled = true;
+        resultsContainer.style.display = 'none';
+        resultsContainer.innerHTML = '';
+        
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5`);
+            const data = await res.json();
+            
+            if (data && data.length > 0) {
+                if (data.length === 1) {
+                    selectAddress(data[0]);
+                } else {
+                    resultsContainer.style.display = 'block';
+                    data.forEach((item) => {
+                        const div = document.createElement('div');
+                        div.className = 'address-option';
+                        div.innerText = item.display_name;
+                        div.onclick = () => selectAddress(item);
+                        resultsContainer.appendChild(div);
+                    });
+                }
+            } else {
+                alert("No addresses found. Try being more specific or use the GPS button.");
+            }
+        } catch(e) {
+            alert("Search failed. Check your internet connection.");
+        } finally {
+            btn.innerText = origText;
+            btn.disabled = false;
+        }
+    }
+
+    function selectAddress(item) {
+        const resultsContainer = document.getElementById('address_results');
+        resultsContainer.style.display = 'none';
+        resultsContainer.innerHTML = '';
+        
+        let addressText = item.display_name;
+        if (item.address && item.address.postcode) {
+            addressText = addressText.replace(', ' + item.address.postcode, '');
+            addressText = addressText.replace(item.address.postcode, '');
+        }
+        addressText = addressText.replace(', United Kingdom', '');
+        
+        document.getElementById('venue_address').value = addressText;
+        if (item.address && item.address.postcode) {
+            document.getElementById('postcode').value = item.address.postcode;
+        }
+        saveDraft();
     }
 
     function handlePhotoUpload(event) {
